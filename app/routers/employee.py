@@ -74,6 +74,17 @@ def apply_leave(payload: LeaveCreate, db: Session = Depends(get_db), current_use
     delta = (payload.end_date - payload.start_date).days + 1
     if delta <= 0:
         raise HTTPException(400, "End date must be after start date")
+
+    # ── Leave balance check ──────────────────────────────
+    from sqlalchemy import func
+    used = db.query(func.sum(Leave.days)).filter(
+        Leave.employee_id == emp.id,
+        Leave.status == LeaveStatusEnum.APPROVED
+    ).scalar() or 0
+    remaining = 24 - used
+    if delta > remaining:
+        raise HTTPException(400, f"Insufficient leave balance. You have {remaining} day(s) remaining but requested {delta} day(s).")
+
     leave = Leave(
         employee_id=emp.id,
         leave_type=payload.leave_type,
